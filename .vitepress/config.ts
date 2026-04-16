@@ -37,10 +37,6 @@ export default defineConfig({
       },
     ],
 
-    socialLinks: [
-      { icon: "github", link: "https://github.com/keypsafe" },
-    ],
-
     search: {
       provider: "local",
     },
