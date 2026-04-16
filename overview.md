@@ -95,10 +95,10 @@ Use a password manager for everything. Use Keypsafe specifically for your seed p
 
 | Property | Keypsafe |
 |---|---|
-| Does Keypsafe store your seed? | No — only ciphertext |
+| Does Keypsafe store your seed phrase? | Never as plaintext, only as encrypted ciphertext |
 | Can Keypsafe decrypt your vault? | No — encryption keys never leave your device |
-| What happens if Keypsafe is hacked? | Attacker gets ciphertext only — nothing decryptable |
-| What if you lose your phone? | Reset your passkey with password + recovery key from any device |
+| What happens if Keypsafe is hacked? | Attacker gets ciphertext and email — nothing decryptable |
+| What if you lose your device? | Reset your passkey with password + recovery key from any device |
 | What if you forget your password? | Log in with magic link to reset your password with your passkey |
 | What if you lose your recovery key? | Reset with passkey |
 | What if you lose both your passkey and recovery key? | Vault is unrecoverable — this is by design |

@@ -5,7 +5,7 @@ export default defineConfig({
   description: "Encrypted backup and recovery for crypto wallets",
 
   head: [
-    ["link", { rel: "icon", href: "/favicon.ico" }],
+    ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
   ],
 
   themeConfig: {

@@ -30,20 +30,21 @@ All AES-GCM, HKDF, and SHA-256 operations use the browser's native Web Crypto AP
 
 ## Key hierarchy
 
+The passkey factor derivation differs depending on the surface. The web app and CLI receive the raw PRF output directly from the WebAuthn ceremony and derive `wrapKeyPK` in one step. The wallet bridge adds an intermediate vault-scoped derivation before handing anything to the wallet.
+
+**Web app / CLI**
+
 ```
 passkey PRF output (userPrf)        password + recovery key
        │                                     │
        │ HKDF-SHA256                         │ Argon2id → kPwd
-       │ info=keypsafe/prf/vault/v1          │ then concat: kPwd ‖ recoveryKey
-       │ salt=UTF8(vaultId)                  │
-       ▼                                     │ HKDF-SHA256
-  vaultPrf (vault-scoped IKM)               │ info=keypsafe/kek/pwdpk/v1
-       │                                     │ salt=kdfSalt
-       │ HKDF-SHA256                         ▼
-       │ info=keypsafe/kek/pk/v1        wrapKeyPWDPK
+       │ info=keypsafe/kek/pk/v1             │ then concat: kPwd ‖ recoveryKey
        │ salt=kdfSalt                        │
-       ▼                                     │
-   wrapKeyPK                                 │
+       ▼                                     │ HKDF-SHA256
+   wrapKeyPK                                 │ info=keypsafe/kek/pwdpk/v1
+       │                                     │ salt=kdfSalt
+       │                                     ▼
+       │                                wrapKeyPWDPK
        │                                     │
        └──────────────┬──────────────────────┘
                       │ both wrap the same DEK
@@ -62,6 +63,26 @@ passkey PRF output (userPrf)        password + recovery key
        META envelope     payload ciphertext
 ```
 
+**Wallet bridge** (extra derivation step; `userPrf` never leaves the bridge)
+
+```
+passkey PRF output (userPrf)
+       │
+       │ HKDF-SHA256                    ← userPrf overwritten after this (best-effort)
+       │ info=keypsafe/prf/vault/v1
+       │ salt=UTF8(vaultId)
+       ▼
+  vaultPrf (vault-scoped IKM)           ← only this value crosses into wallet code
+       │
+       │ HKDF-SHA256
+       │ info=keypsafe/kek/pk/v1
+       │ salt=kdfSalt
+       ▼
+   wrapKeyPK
+       │
+       └──────── wraps DEK (same as above from here)
+```
+
 ---
 
 ## DEK (data encryption key)
@@ -72,7 +93,7 @@ Each vault has a unique 32-byte DEK generated at creation time with `crypto.getR
 - It wraps the vault metadata via `metaKey` (HKDF from DEK)
 - It is itself wrapped — never stored in plaintext — by two independent key-encryption keys (KEKs): one per factor (i.e. one passkey KEK, one password + recovery key KEK)
 
-The DEK is zeroed in memory immediately after use.
+The DEK is overwritten in memory after use (best-effort in JavaScript — see [Zeroization](#zeroization)).
 
 ---
 
@@ -108,7 +129,7 @@ DEK = AES-GCM-256-Decrypt(wrapKeyPK, pkEnvelope.ciphertext)
 
 This two-layer derivation enforces a trust boundary:
 
-- The `userPrf` (skeleton key for all vaults) stays inside the Keypsafe bridge and is zeroed immediately after the per-vault derivation
+- The `userPrf` (skeleton key for all vaults) stays inside the Keypsafe bridge and is overwritten after the per-vault derivation (best-effort)
 - A wallet receives only `vaultPrf`, which can decrypt exactly the one vault it is scoped to
 - Even a fully compromised wallet cannot derive the `userPrf` or decrypt any other vault
 
@@ -214,14 +235,14 @@ The META envelope is derived from the DEK (not from a factor directly), so it ca
 
 1. Generate `vaultId` (UUID) **before** any PRF ceremony — the vault-scoped PRF derivation needs it
 2. Derive `vaultPrf = HKDF(userPrf, salt=UTF8(vaultId), info="keypsafe/prf/vault/v1")` — this is the IKM for the PK envelope
-3. Zero `userPrf` immediately
+3. Overwrite `userPrf` (best-effort)
 4. Generate `DEK` (32 random bytes), `kdfSalt` (32 random bytes), and `argonSalt` (16 random bytes)
 5. Build AADs for each envelope from `userId` + `vaultId` + factor label
 6. Derive `payloadKey` via HKDF(DEK, kdfSalt, `keypsafe/dek/payload/v1`) and encrypt plaintext
 7. Derive `wrapKeyPK` via HKDF(vaultPrf, kdfSalt, `keypsafe/kek/pk/v1`) and encrypt DEK → `pk_envelope`
 8. Derive `kPwd` via Argon2id(password, argonSalt); combine with `recoveryKey` → derive `wrapKeyPWDPK` via HKDF → encrypt DEK → `pwdpk_envelope`
 9. Derive `metaKey` via HKDF(DEK, kdfSalt, `keypsafe/meta/v1`) and encrypt metadata JSON → `meta_envelope`
-10. Zero DEK, vaultPrf, and intermediate keys
+10. Overwrite DEK, vaultPrf, and intermediate keys (best-effort)
 11. Persist all envelopes, nonces, AADs, Argon params, `kdfSalt`, and `suite` version to the database
 
 ---
@@ -236,7 +257,7 @@ The META envelope is derived from the DEK (not from a factor directly), so it ca
 6. Derive `metaKey` → decrypt `meta_envelope` → parse metadata JSON
 7. Compare `meta.kdf_salt_b64url` against the database `kdf_salt` with a constant-time XOR comparison; abort if they differ
 8. Derive `payloadKey` → decrypt payload ciphertext
-9. Zero DEK
+9. Overwrite DEK (best-effort)
 
 ---
 
@@ -281,19 +302,19 @@ This means:
 
 ## Zeroization
 
-Sensitive key material is explicitly zeroed in memory after use:
+**JavaScript zeroization is best-effort.** The runtime does not guarantee memory layout, and the GC can copy buffers before they are overwritten. Zeroization cannot be relied upon as a hard security boundary in a JS environment.
 
-| Material | Where zeroed |
+That said, Keypsafe explicitly overwrites sensitive key material after use, which narrows the window during which an attacker reading process memory could recover key material. It is a defense-in-depth measure, not a guarantee.
+
+| Material | Where overwritten |
 |---|---|
 | DEK | `decryptVault` finally block; `encryptVault` after envelope creation |
 | `pwdpkKey` (kPwd ‖ recoveryKey) | `KeypsafeSDK.decryptVault` finally block |
 | `recoveryKey` | `KeypsafeSDK.createVault` after encrypt completes |
 | `kPwd` intermediate | `derivePwdpkKey` after combining with recovery key |
 | META plaintext (during recovery key retrieval) | `recoverPaperKeyFromFirstVault` finally block |
-| `userPrf` (raw WebAuthn PRF output) | Bridge `completePasskeyRequest` finally block, immediately after vault-scoped derivation |
+| `userPrf` (raw WebAuthn PRF output) | Bridge `completePasskeyRequest` finally block, after vault-scoped derivation |
 | `vaultPrf` (vault-scoped IKM) | Bridge after sending to wallet; `KeypsafeSDK.decryptVault` and `createVault` finally blocks |
-
-JavaScript does not guarantee memory layout or prevent GC from copying buffers, so zeroization is best-effort. However, it closes the window for an attacker who can read process memory at a specific moment after decryption completes.
 
 ---
 
