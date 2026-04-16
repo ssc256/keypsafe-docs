@@ -124,7 +124,7 @@ User input (plaintext + password)
   └─ supabaseStorage.createVault() → persist all ciphertexts
 ```
 
-Plaintext never leaves the device. The recovery key is generated at signup in a dedicated system vault (hidden from vault listings). Wallets obtain it at backup time via a bridge request; users can view it in Settings using their passkey.
+Plaintext never leaves the device. The recovery key is generated at signup in a dedicated system vault (hidden from vault listings) and shown to the user on the save-recovery-key page. During wallet backup, the bridge loads the paper key vault internally to construct recovery envelopes — the paper key never crosses the postMessage boundary to the wallet. Users can view the recovery key again at any time in Settings using their passkey.
 
 ### Decryption (unlock vault)
 
@@ -163,21 +163,85 @@ Wallet                             Keypsafe bridge
 
 ## Database schema (Supabase)
 
-All vault data lives in a single `vault` table. Columns of note:
+All vault data lives in a single `vault` table.
+
+**`email` is the only PII stored.** Everything else is either opaque identifiers, ciphertext, or key-derivation parameters.
+
+### Identity and metadata
 
 | Column | Type | Purpose |
 |---|---|---|
 | `id` | UUID | Vault identifier |
 | `user_id` | UUID | Owner (FK to `auth.users`) |
-| `payload_ciphertext` | bytea | Encrypted secret |
-| `pk_envelope_ciphertext` | bytea | Passkey-wrapped DEK |
-| `pwdpk_envelope_ciphertext` | bytea | Password+recovery key-wrapped DEK |
-| `meta_envelope_ciphertext` | bytea | Encrypted metadata (contains recovery key) |
-| `argon_salt` | bytea | Per-vault Argon2id salt |
-| `kdf_salt` | bytea | Per-vault HKDF salt |
-| `suite` | int | Crypto suite version |
+| `email` | text | Owner email — the only PII in this table |
+| `vault_label` | text | User-supplied vault name (plaintext) |
+| `credential_id` | text | WebAuthn credential ID (base64url) used for the passkey PRF ceremony |
+| `secret_type` | text | Vault classification — `paper_key` marks the system recovery vault; other values are wallet/user-defined |
+| `vault_source` | text | Origin of the vault — `keypsafe` for system vaults created by the web app |
 
-Each envelope has a corresponding `_nonce`, `_aad`, and `_version` column. AAD binds each envelope to a specific `userId` + `vaultId`, preventing ciphertext transplant attacks.
+### Payload
+
+| Column | Type | Purpose |
+|---|---|---|
+| `payload_ciphertext` | bytea | AES-GCM ciphertext of the user's secret |
+| `payload_nonce` | bytea | AES-GCM nonce for `payload_ciphertext` |
+| `payload_version` | int | Envelope format version |
+
+### Passkey envelope (`pk_*`)
+
+DEK wrapped with a key derived from the passkey PRF output.
+
+| Column | Type | Purpose |
+|---|---|---|
+| `pk_envelope_ciphertext` | bytea | AES-GCM-wrapped DEK |
+| `pk_envelope_nonce` | bytea | AES-GCM nonce |
+| `pk_envelope_aad` | bytea | AAD — binds this envelope to `userId` + `vaultId` |
+| `pk_envelope_version` | int | Envelope format version |
+
+### Password+recovery key envelope (`pwdpk_*`)
+
+DEK wrapped with a key derived from the password and recovery key. Independent of the passkey path.
+
+| Column | Type | Purpose |
+|---|---|---|
+| `pwdpk_envelope_ciphertext` | bytea | AES-GCM-wrapped DEK |
+| `pwdpk_envelope_nonce` | bytea | AES-GCM nonce |
+| `pwdpk_envelope_aad` | bytea | AAD — binds this envelope to `userId` + `vaultId` |
+| `pwdpk_envelope_version` | int | Envelope format version |
+
+### Metadata envelope (`meta_*`)
+
+Encrypted vault metadata. Contains the recovery key (paper key) in plaintext within the ciphertext, so subsequent vaults can recover it via passkey without asking the user again.
+
+| Column | Type | Purpose |
+|---|---|---|
+| `meta_envelope_ciphertext` | bytea | AES-GCM-encrypted metadata JSON |
+| `meta_envelope_nonce` | bytea | AES-GCM nonce |
+| `meta_envelope_aad` | bytea | AAD — binds this envelope to `userId` + `vaultId` |
+| `meta_envelope_version` | int | Envelope format version |
+
+### Key-derivation parameters
+
+| Column | Type | Purpose |
+|---|---|---|
+| `kdf_salt` | bytea | Per-vault HKDF salt (used when deriving all wrapping keys) |
+| `argon_salt` | bytea | Per-vault Argon2id salt |
+| `argon_time` | int | Argon2id time cost |
+| `argon_mem_mib` | int | Argon2id memory cost (MiB) |
+| `argon_parallelism` | int | Argon2id parallelism |
+| `argon_version` | int | Argon2id algorithm version |
+
+### Versioning and timestamps
+
+| Column | Type | Purpose |
+|---|---|---|
+| `suite` | int | Crypto suite version for the whole vault |
+| `aad_version` | int | AAD construction version |
+| `created_at` | timestamptz | Row creation time |
+| `updated_at` | timestamptz | Last row update time |
+| `last_decrypted_at` | timestamptz | Set each time the vault is successfully decrypted |
+
+AAD binds each envelope to a specific `userId` + `vaultId`, preventing ciphertext transplant attacks.
 
 **RLS** (`user_id = auth.uid()`) is the primary access guard. The storage adapter also filters by `userId` in every query as defense-in-depth.
 
