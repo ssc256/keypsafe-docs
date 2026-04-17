@@ -97,7 +97,7 @@ Two classes for different audiences:
 - **`KeypsafeSDK`** — the lower-level class used by the Keypsafe web app. Requires a `StorageAdapter` and explicit passkey material. Methods: `decryptVault()`, `decryptVaultWith()`, `encryptForBridge()`, `createVault()`.
 - **`KeypsafeClient`** — the raw bridge transport (`postMessage` + popup management). Exported for advanced use cases.
 
-For wallet integrations, see the [SDK integration guide](/docs/sdk/sdk-integration).
+For wallet integrations, there is an integration guide coming soon.
 
 ### `utils`
 
