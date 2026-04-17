@@ -114,7 +114,7 @@
 **Impact without mitigations:** A user who authorizes a malicious wallet integration could have their seed or private key stolen.
 
 **Mitigations:**
-- The wallet bridge requires explicit user authorization via the `CONNECT` flow
+- The wallet bridge requires user interaction — every backup requires a passkey ceremony and password entry; every restore requires a passkey ceremony
 - Origin allowlisting restricts which wallets can communicate with the bridge
 - Keypsafe does not control what wallets are built on top of the SDK — this is analogous to any open API being abused
 

@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: Zero-knowledge
-    details: Encryption and decryption happen entirely on your device. Keypsafe servers store only ciphertext — even a full database breach doesn't reveal your secrets.
+    details: Encryption and decryption happen entirely on your device. Keypsafe servers only see ciphertext — even a full database breach doesn't reveal your secrets.
   - title: Two recovery factors
     details: Every vault is protected by a passkey and a password + recovery key. Either factor alone can decrypt. Losing one is never fatal.
   - title: Open cryptography

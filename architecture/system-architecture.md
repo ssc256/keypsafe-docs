@@ -40,18 +40,24 @@ node recover.js backup.json --stdout
 
 Secrets are never accepted via command-line arguments (shell history / `ps aux` exposure). One of `--output` or `--stdout` must be specified; omitting both is an error.
 
-### Wallet SDK demos
+### Wallet SDK
 
-Fox Wallet and Ghost Wallet are reference integrations showing how a wallet can embed the Keypsafe SDK to offer encrypted seed backup and restore without routing plaintext through a server.
+The `Keypsafe` class is the primary integration surface for wallet developers. It collapses bridge communication, passkey ceremonies, encryption, and decryption into a single API:
 
-The integration pattern:
+```js
+import { Keypsafe } from "@keypsafe/wallet";
 
-1. Wallet embeds the Keypsafe SDK
-2. Wallet encrypts the seed locally — plaintext never leaves the wallet process
-3. Wallet sends the encrypted vault to the Keypsafe bridge for storage
-4. On restore, the bridge returns the encrypted vault; the wallet decrypts locally
+const ks = new Keypsafe("https://app.keypsafe.io");
+await ks.backup(seedBytes, { label: "My Wallet", source: "my-wallet" });
+const seed = await ks.restore(vaultId);
+ks.dispose();
+```
 
-The current SDK targets JavaScript environments (browser and Node.js). The demos use `postMessage` as the bridge transport because they run in a browser context. The underlying crypto and vault format are platform-agnostic; native library ports are on the roadmap.
+Internally, the SDK opens a popup to the Keypsafe bridge page and communicates via `postMessage`. Plaintext never crosses the bridge — crypto runs in the wallet's process.
+
+Fox Wallet and Ghost Wallet (in `apps/wallets/`) are reference integrations demonstrating the full backup and restore flow.
+
+The current SDK targets JavaScript environments (browser extensions and web wallets). The underlying crypto and vault format are platform-agnostic; native library ports are on the roadmap.
 
 ---
 
@@ -85,13 +91,13 @@ Backend abstraction and WebAuthn integration.
 
 ### `sdk`
 
-The `KeypsafeSDK` class. Wires `flows`, `platform`, and `crypto` together for callers.
+Two classes for different audiences:
 
-- `decryptVault(opts)` — decrypt a vault by ID
-- `decryptVaultWith(opts, fn)` — decrypt, run a function with the plaintext, auto-zero
-- `createVault(opts)` — create a new vault with both recovery factors
+- **`Keypsafe`** — the wallet-facing API. Handles popup, passkey PRF, bridge communication, encryption, and decryption internally. Wallet devs import this and nothing else. Methods: `connect()`, `backup()`, `restore()`, `restoreWith()`, `listVaults()`, `dispose()`.
+- **`KeypsafeSDK`** — the lower-level class used by the Keypsafe web app. Requires a `StorageAdapter` and explicit passkey material. Methods: `decryptVault()`, `decryptVaultWith()`, `encryptForBridge()`, `createVault()`.
+- **`KeypsafeClient`** — the raw bridge transport (`postMessage` + popup management). Exported for advanced use cases.
 
-Initialized with a storage adapter: `new KeypsafeSDK({ storage })`.
+For wallet integrations, see the [SDK integration guide](/docs/sdk/sdk-integration).
 
 ### `utils`
 
