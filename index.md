@@ -22,5 +22,5 @@ features:
   - title: Two recovery factors
     details: Every vault is protected by a passkey and a password + recovery key. Either factor alone can decrypt. Losing one is never fatal.
   - title: Open cryptography
-    details: AES-256-GCM, Argon2id, HKDF-SHA256. Published security model and threat model. No proprietary crypto, no trust us claims. Open source after audit. 
+    details: AES-256-GCM, Argon2id, HKDF-SHA256. Published security model and threat model. No proprietary crypto, no trust us claims. 
 ---

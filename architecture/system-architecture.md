@@ -4,7 +4,7 @@
 
 Keypsafe is a client-side encrypted vault system for storing crypto wallet secrets (seeds, private keys). Encryption and decryption happen entirely on the user's device, while the backend stores only ciphertext. The server cannot read user secrets even with full database access.
 
-The system has three user-facing surfaces: a **web app**, a **CLI recovery tool**, and a **wallet SDK** that is designed to support any platform — browser extension, mobile app, desktop app — to add encrypted backup and restore without sending plaintext off-device.
+The system currently has three surfaces: a **web app**, a **CLI recovery tool**, and a **wallet SDK**.
 
 ---
 
@@ -12,7 +12,7 @@ The system has three user-facing surfaces: a **web app**, a **CLI recovery tool*
 
 ### Web app
 
-The primary user interface. Built with Vite + React.
+For now, the primary user interface. Built with Vite + React.
 
 **Key routes:**
 
@@ -97,7 +97,7 @@ Two classes for different audiences:
 - **`KeypsafeSDK`** — the lower-level class used by the Keypsafe web app. Requires a `StorageAdapter` and explicit passkey material. Methods: `decryptVault()`, `decryptVaultWith()`, `encryptForBridge()`, `createVault()`.
 - **`KeypsafeClient`** — the raw bridge transport (`postMessage` + popup management). Exported for advanced use cases.
 
-For wallet integrations, there is an integration guide coming soon.
+There is a guide for wallet integrations coming soon.
 
 ### `utils`
 

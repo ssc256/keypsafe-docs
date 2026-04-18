@@ -9,7 +9,7 @@ This document describes the cryptographic design of Keypsafe: what keys exist, h
 - Secrets never leave the user's device in plaintext
 - The database contains only ciphertext, so a full breach exposes nothing decryptable
 - Two independent factors can each decrypt a vault: the passkey alone is sufficient for regular use; the password + recovery key together when the passkey is unavailable
-- Every ciphertext is bound to its owner and purpose via authenticated data — transplanting an envelope into another user's vault causes decryption to fail at the cryptographic level
+- Each ciphertext is bound to its owner and purpose via authenticated data — transplanting an envelope into another user's vault causes decryption to fail at the cryptographic level
 - The scheme is versioned so algorithm changes do not require re-encrypting all vaults at once
 
 ---
@@ -155,7 +155,7 @@ DEK = AES-GCM-256-Decrypt(wrapKeyPWDPK, pwdpkEnvelope.ciphertext)
 
 The Argon parameters (`argonSalt`, `time`, `memMiB`, `parallelism`, `version`) are stored per-vault in the database, so they can be migrated independently of the vault's encryption.
 
-**The recovery key** is generated once at signup (32 random bytes) and stored in a dedicated system vault (`secret_type = 'paper_key'`, `vault_source = 'keypsafe'`). This vault is filtered out of all user-facing vault listings. In the wallet-bridge flow, the bridge decrypts this system vault internally during backup finalization; the recovery key never crosses into wallet code. Lost-passkey recovery happens in the Keypsafe web app or CLI rather than through the wallet bridge.
+**The recovery key** is generated once at signup (32 random bytes) and stored in a dedicated system vault (`secret_type = 'paper_key'`, `vault_source = 'keypsafe'`). This vault is filtered out of all user-facing vault listings. In the wallet bridge flow, the bridge decrypts this system vault internally to create the backup envelopes; the recovery key never crosses into the wallet. The fallback path is only available in the Keypsafe web app or CLI rather than through the wallet bridge.
 
 ### Independence of the two factors
 

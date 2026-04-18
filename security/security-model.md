@@ -10,7 +10,7 @@
 
 **Weak passwords.** The password factor is hardened with Argon2id (time=3, memory=64MiB) before being combined with the recovery key. Offline brute-force attacks against the password alone are computationally expensive, and the recovery key adds 256 bits of entropy that the attacker must also possess.
 
-**Single factor loss.** Losing a passkey does not lose the vault — the password+recovery key path is an independent wrapping of the same DEK. Losing the recovery key (but keeping the passkey) is also recoverable. Both factors must be lost simultaneously to lose access permanently.
+**Single factor loss.** Losing a passkey does not lose the vault — the password+recovery key path is an independent wrapping of the same DEK. Losing the recovery key is also recoverable with the passkey. Both factors must be lost to lose access permanently.
 
 ---
 
@@ -22,7 +22,7 @@
 
 **Passkey credential theft.** Passkey credentials are hardware-backed on most modern devices (Secure Enclave, TPM). Theft is difficult but not impossible — a compromised OS or authenticator could expose the credential.
 
-**The PRF delegation boundary.** The Keypsafe bridge allows third-party wallets to request a passkey PRF via `PASSKEY_PRF_REQUEST`. The bridge performs the WebAuthn ceremony internally and derives a **vault-scoped IKM** (`vaultPrf = HKDF(userPrf, vaultId, "keypsafe/prf/vault/v1")`) before responding. The raw `userPrf` (which would unlock all of a user's vaults) never crosses the postMessage boundary. Wallets receive only a value scoped to the single requested vault, so a compromised wallet can decrypt at most one vault — the one it backed up. The postMessage channel itself is origin-checked and constrained to the wallet/bridge pair. See the [threat model](./threat-model) for more detail.
+**The PRF delegation boundary.** The Keypsafe bridge allows third-party wallets to request a passkey PRF via `PASSKEY_PRF_REQUEST`. The bridge performs the WebAuthn ceremony internally and derives a **vault-scoped IKM** (`vaultPrf = HKDF(userPrf, vaultId, "keypsafe/prf/vault/v1")`) before responding. The raw `userPrf` (which would unlock all of a user's vaults) never crosses the postMessage boundary. Wallets receive only a value scoped to the single requested vault, so a compromised wallet can decrypt at most one vault — the same one it backed up. The postMessage channel itself is origin-checked and constrained to the wallet/bridge pair. See the [threat model](./threat-model) for more detail.
 
 ---
 
@@ -58,7 +58,7 @@ Either path alone is sufficient to decrypt. Neither path reveals anything about 
 
 **Metadata integrity.** The metadata envelope (encrypted with the DEK) contains the `kdf_salt`. On decryption, the decrypted `kdf_salt` is compared against the value stored in the database. A mismatch aborts decryption and indicates tampering.
 
-**Zeroization.** Sensitive key material (DEK, intermediate wrapping keys) is zeroed in memory immediately after use.
+**Zeroization.** Sensitive key material (DEK, intermediate wrapping keys) is overwritten in memory (best-effort zeroization in JS environment) after use.
 
 **Versioning.** Every envelope stores a version number. The crypto suite is versioned at the vault level. Algorithm upgrades do not require migrating existing vaults immediately — old and new suites can coexist.
 

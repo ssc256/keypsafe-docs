@@ -200,4 +200,4 @@ This means the PRF output is stable across devices and sessions for the same use
 | `payloadKey` | DEK + kdfSalt | HKDF | Yes | Never |
 | `metaKey` | DEK + kdfSalt | HKDF | Yes | Never |
 
-"Never stored" keys exist only in memory during the encryption or decryption operation and are zeroed immediately after use.
+"Never stored" keys exist only in memory during the encryption or decryption operation and are zeroed (JS best-effort) after use.
